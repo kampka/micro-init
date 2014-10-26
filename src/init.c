@@ -44,24 +44,35 @@ int main ( int argc, char *argv[] )
 
     const char * init_dir = "/etc/initrc.d";
     if (access(init_dir, F_OK) == 0) {
-        DIR * dirp = opendir(init_dir);
-        struct dirent * dp;
-        while ((dp = readdir(dirp)) != NULL){
-            char * file;
-            int len;
-            len = snprintf(NULL, 0, "%s/%s", init_dir, dp->d_name);
-            if (!(file = malloc((len + 1) * sizeof (char)))){
-                printf("Could not allocate memory. Exiting.");
-                return 15;
-            }
-            snprintf(file, len+1, "%s/%s", init_dir, dp->d_name);
-            struct stat s;
-            if( stat(file,&s) == 0 && s.st_mode & S_IFREG && access(file, F_OK|X_OK) == 0) {
-                system(file);
-            }
-            free(file);
-        }
-        (void)closedir(dirp);
+		struct dirent **namelist;
+		int n, m;
+		n = scandir(init_dir, &namelist, 0, alphasort);
+		if ( n < 0 ) {
+			printf("Error scanning directory %s", init_dir);
+			return 11;
+		} else {
+			for(m = 0; m < n; m++) {
+				char * file;
+				int len;
+				len = snprintf(NULL, 0, "%s/%s", init_dir, namelist[m]->d_name);
+				if (!(file = malloc((len + 1) * sizeof (char)))) {
+					printf("Could not allocate memory. Exiting.");
+					return 15;
+				}
+				snprintf(file, len+1, "%s/%s", init_dir, namelist[m]->d_name);
+				struct stat s;
+				if( stat(file,&s) == 0 && s.st_mode & S_IFREG && access(file, F_OK|X_OK) == 0) {
+					int i = ((system(file) & 0xff00) >> 8);
+					if(i != 0) {
+						printf("An error occured running initrc.d (%s:%d).", file, i);
+						return i;
+					}
+				}
+				free(file);
+				free(namelist[m]);
+			}
+		}
+		free(namelist);
     }
 
     char * args[argc];
